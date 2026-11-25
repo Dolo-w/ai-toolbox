@@ -294,7 +294,7 @@
   <div class="panel-box tool-panel" id="panel-convert">
     <div class="row">
       <div class="left">
-        <div class="drop" id="dropConv">点击或拖拽上传 .docx / .doc / .pdf<br><small>方向按扩展名自动判断；转换在本机 Word 里完成，文件不上传</small></div>
+        <div class="drop" id="dropConv">点击或拖拽上传 .docx / .doc / .pdf<br><small>方向按扩展名自动判断；全程本机处理，文件不上传</small></div>
         <input type="file" id="fileConv" accept=".docx,.doc,.pdf" hidden>
         <button class="go" id="goConv" disabled>开始转换</button>
         <div class="pbar-row" id="pbarConv" style="display:none">
@@ -302,7 +302,7 @@
           <div class="pbar-text" id="pbarConvText"></div>
         </div>
         <div class="msg" id="msgConv"></div>
-        <p class="tip" style="text-align:left">Word 转 PDF 保留原排版；PDF 转回来是「可编辑的近似稿」，扫描件和复杂图表效果有限。</p>
+        <p class="tip" style="text-align:left">Word → PDF 调本机 Word，保原排版，需要已激活的 Word；PDF → Word 用内置引擎，不需要 Word，出来是「可编辑的近似稿」。</p>
       </div>
       <div class="right result" id="convBox" style="display:none">
         <label class="sec" style="text-align:left">转换结果</label>
@@ -1218,4 +1218,5 @@ $("goDisk").onclick = () => {
 </script>
 </body>
 </html>
+
 

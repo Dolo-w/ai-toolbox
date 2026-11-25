@@ -15,7 +15,7 @@
 | 视频字幕 | 语音转写导出 SRT；把字幕**烧进画面**输出新视频 | SenseVoice（sherpa-onnx）+ ffmpeg |
 | 图片消除笔 | 涂抹擦除水印、路人、小杂物 | OpenCV Telea inpaint |
 | 老照片修复 | 2/3/4 倍放大 + 锐化 | OpenCV dnn_superres（EDSR / FSRCNN） |
-| Word ⇄ PDF | 双向转换，按文件头自动判方向；PDF 回来的是可编辑近似稿 | 本机 Microsoft Word（COM） |
+| Word ⇄ PDF | 双向转换，按文件头自动判方向；PDF 回来的是可编辑近似稿 | Word→PDF：本机 Word（COM）；PDF→Word：pdf2docx |
 | 磁盘体检 | 只读扫描，找大文件夹、大文件、可清理项 | 纯 Python |
 
 ## 架构
@@ -127,6 +127,7 @@ pyinstaller xiaoGongJuXiang.spec
 - 超分需要带 `dnn_superres` 的 OpenCV 构建（`opencv-contrib-python`）；
   官方 `opencv-python` 没有这个模块，会退化到插值。
 - 老照片修复只做放大增强，不做人脸修复、划痕修补。
+
 
 
 

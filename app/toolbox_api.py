@@ -731,6 +731,24 @@ WD_DOCX = 16   # wdFormatXMLDocument
 WD_PDF = 17    # wdFormatPDF
 
 
+def _pdf2docx_convert(src, dst):
+    """PDF → Word 用 pdf2docx（PyMuPDF 底层），完全不依赖 Microsoft Word。
+    先写临时文件再搬，避免目标目录被占用时留下半截文件。"""
+    from pdf2docx import Converter
+    tmp_dst = os.path.join(tempfile.gettempdir(), "toolbox_p2d_%d.docx" % int(time.time() * 1000))
+    cv = Converter(src)
+    try:
+        cv.convert(tmp_dst)
+    finally:
+        try:
+            cv.close()
+        except Exception:
+            pass
+    if not os.path.exists(tmp_dst) or os.path.getsize(tmp_dst) == 0:
+        raise RuntimeError("pdf2docx 没有产出文件（可能 PDF 是扫描件或受密码保护）")
+    shutil.move(tmp_dst, dst)
+
+
 def _word_convert(src, dst, fmt):
     """用本机 Word 转格式。先存到临时文件再搬到目标目录：
     直接 SaveAs2 到 Downloads 下偶尔会报「命令失败」，两步走更稳。"""
@@ -769,10 +787,14 @@ def _convert_job(tid, data, ext, out_name, fmt):
             src = os.path.join(td, "input" + ext)
             with open(src, "wb") as f:
                 f.write(data)
-            _task_set(tid, phase="convert", progress=20, message="正在调用本机 Word 转换…")
             dst = os.path.join(CONVERT_DIR, out_name)
-            with _WORD_LOCK:
-                _word_convert(src, dst, fmt)
+            if fmt == WD_DOCX:
+                _task_set(tid, phase="convert", progress=20, message="正在解析 PDF，重建 Word 排版…")
+                _pdf2docx_convert(src, dst)
+            else:
+                _task_set(tid, phase="convert", progress=20, message="正在调用本机 Word 转换…")
+                with _WORD_LOCK:
+                    _word_convert(src, dst, fmt)
         if not os.path.exists(dst) or os.path.getsize(dst) == 0:
             raise RuntimeError("转换没有产出文件，可能源文件损坏或受密码保护")
         _task_set(tid, done=True, ok=True, phase="done", progress=100,
@@ -782,7 +804,9 @@ def _convert_job(tid, data, ext, out_name, fmt):
         traceback.print_exc()
         msg = f"{type(e).__name__}: {e}"
         if "com_error" in msg.lower():
-            msg = "调用 Word 失败。请确认本机装了 Microsoft Word，或先关掉正在运行的 Word 窗口。"
+            msg = ("Word → PDF 这一步要用你机器上的 Word，需要「已激活」的桌面版。"
+                   "未激活、订阅已过期、或只装了网页版 / WPS 都用不了。"
+                   "PDF → Word 走的是内置引擎，不需要 Word。")
         _task_set(tid, done=True, ok=False, phase="error", message="转换失败", error=msg)
 
 
