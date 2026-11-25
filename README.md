@@ -2,6 +2,8 @@
 
 五个常用小功能，装进一个本地窗口。**全部推理在本机完成，图片和录音不上传。**
 
+![界面](docs/screenshot.png)
+
 做这个的起因很具体：证件照、字幕、擦水印、放大、清磁盘这五件事，散在五个网站，
 每一件都要先上传、等进度条、再注册。挪到自己机器上之后，这些步骤没有了。
 
@@ -120,4 +122,5 @@ pyinstaller xiaoGongJuXiang.spec
 - 超分需要带 `dnn_superres` 的 OpenCV 构建（`opencv-contrib-python`）；
   官方 `opencv-python` 没有这个模块，会退化到插值。
 - 老照片修复只做放大增强，不做人脸修复、划痕修补。
+
 
