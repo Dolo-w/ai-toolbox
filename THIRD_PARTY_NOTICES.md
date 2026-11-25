@@ -7,7 +7,7 @@
 | 组件 | 用途 | 协议 | 是否在本仓库内 |
 |---|---|---|---|
 | [HivisionIDPhotos](https://github.com/Zeyi-Lin/HivisionIDPhotos) | 证件照抠图与排版 | Apache-2.0 | 否（需自行安装） |
-| [faster-whisper](https://github.com/SYSTRAN/faster-whisper) | 语音转写兜底 | MIT | 否（pip 安装） |
+
 | [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) + [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | 中文语音转写 | Apache-2.0 | 模型不在仓库内 |
 | EDSR / FSRCNN 超分模型 | 老照片放大 | Apache-2.0 | 否（需下载） |
 | [OpenCV](https://opencv.org/) | 消除笔 inpaint、图像处理 | Apache-2.0 | 否（pip 安装） |
@@ -24,6 +24,7 @@ HarmonyOS Sans 允许个人与商业使用，但**不可单独售卖字体本身
 仓库里没有 `.onnx` / `.pb` 模型文件，原因有两个：体积（合计约 280 MB 以上）与协议归属。
 缺失时程序不会崩：
 
-- 语音：SenseVoice 缺失 → 回退 faster-whisper；都缺失 → 字幕功能报错，其他功能正常。
+- 语音：SenseVoice 模型缺失 → 字幕功能报错，其他功能正常。
 - 超分：模型缺失 → 回退 Lanczos 插值 + 锐化，接口返回 `engine: "LanczosFallback"`。
 - 证件照：HivisionIDPhotos 未安装 → 只有该服务起不来，8081 上的四个功能不受影响。
+

@@ -182,12 +182,11 @@
   <div class="panel-box tool-panel" id="panel-srt">
     <div class="row">
       <div class="left">
-        <div class="drop" id="dropSrt">点击或拖拽上传音频 / 视频<br><small>支持 mp4 / mp3 / wav / m4a / mov 等，首次使用需下载模型</small></div>
+        <div class="drop" id="dropSrt">点击或拖拽上传音频 / 视频<br><small>支持 mp4 / mp3 / wav / m4a / mov 等，模型已内置，无需下载</small></div>
         <input type="file" id="fileSrt" accept="audio/*,video/*" hidden>
         <label class="sec">识别内核</label>
         <select id="srtEngine">
-          <option value="sensevoice" selected>SenseVoice（推荐，快 30 倍，中文更准，自带标点）</option>
-          <option value="whisper">Whisper（小语种 / 更高精度可选模型档）</option>
+          <option value="sensevoice" selected>SenseVoice（本机运行，中文自带标点）</option>
         </select>
         <label class="sec" id="srtModelLabel">Whisper 模型精度</label>
         <select id="srtModel">
@@ -313,7 +312,7 @@
     <div id="diskReport" style="display:none"></div>
   </div>
 
-  <footer>引擎：HivisionIDPhotos（Apache-2.0）· faster-whisper（MIT）· OpenCV dnn_superres / inpaint（Apache-2.0）<br>所有图片音频仅在本机处理，绝不上传云端</footer>
+  <footer>引擎：HivisionIDPhotos（Apache-2.0）· SenseVoice / sherpa-onnx（Apache-2.0）· OpenCV dnn_superres / inpaint（Apache-2.0）<br>所有图片音频仅在本机处理，绝不上传云端</footer>
 </div>
 <script>
 const API = "http://127.0.0.1:8080";   // 证件照
@@ -1143,3 +1142,4 @@ $("goDisk").onclick = () => {
 </script>
 </body>
 </html>
+

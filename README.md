@@ -12,7 +12,7 @@
 | 工具 | 能做 | 引擎 |
 |---|---|---|
 | AI 证件照 | 抠人换底、一寸 295×413 / 二寸 413×579、六寸排版打印 | [HivisionIDPhotos](https://github.com/Zeyi-Lin/HivisionIDPhotos) |
-| 视频字幕 | 语音转写导出 SRT；把字幕**烧进画面**输出新视频 | SenseVoice / faster-whisper + ffmpeg |
+| 视频字幕 | 语音转写导出 SRT；把字幕**烧进画面**输出新视频 | SenseVoice（sherpa-onnx）+ ffmpeg |
 | 图片消除笔 | 涂抹擦除水印、路人、小杂物 | OpenCV Telea inpaint |
 | 老照片修复 | 2/3/4 倍放大 + 锐化 | OpenCV dnn_superres（EDSR / FSRCNN） |
 | 磁盘体检 | 只读扫描，找大文件夹、大文件、可清理项 | 纯 Python |
@@ -69,7 +69,7 @@ pip install -r HivisionIDPhotos/requirements.txt
 
 ```
 app/models/sensevoice/   SenseVoice 语音模型（model.int8.onnx + tokens.txt）
-app/models/whisper/      faster-whisper 模型（可选，SenseVoice 不可用时兜底）
+app/models/sensevoice/  SenseVoice 模型（随包分发，无需下载）
 backend/models/          EDSR_x4.pb / FSRCNN_x4.pb
 ```
 
@@ -107,7 +107,7 @@ pyinstaller xiaoGongJuXiang.spec
 | 组件 | 协议 |
 |---|---|
 | HivisionIDPhotos | Apache-2.0 |
-| faster-whisper | MIT |
+
 | SenseVoice（sherpa-onnx 推理） | Apache-2.0 |
 | EDSR / FSRCNN 模型 | Apache-2.0 |
 | OpenCV | Apache-2.0 |
@@ -122,5 +122,6 @@ pyinstaller xiaoGongJuXiang.spec
 - 超分需要带 `dnn_superres` 的 OpenCV 构建（`opencv-contrib-python`）；
   官方 `opencv-python` 没有这个模块，会退化到插值。
 - 老照片修复只做放大增强，不做人脸修复、划痕修补。
+
 
 

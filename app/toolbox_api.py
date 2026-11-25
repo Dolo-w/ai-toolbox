@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 小工具箱统一后端（端口 8081）
-  /transcribe  语音/视频 -> 字幕（faster-whisper，SRT+纯文本）
+  /transcribe  语音/视频 -> 字幕（SenseVoice / sherpa-onnx，SRT+纯文本）
   /inpaint     图片消除笔（OpenCV Telea 修复）
   /upscale     图片 4x 放大增强（OpenCV dnn_superres，EDSR/FSRCNN 自适应）
 与证件照服务(8080, deploy_api.py)相互独立。
@@ -73,7 +73,10 @@ def get_whisper_model(size: str):
     if size not in ("tiny", "base", "small", "medium"):
         size = "small"
     if size not in _whisper_models:
-        from faster_whisper import WhisperModel
+        try:
+            from faster_whisper import WhisperModel
+        except ImportError:
+            raise RuntimeError("Whisper 内核已从便携包移除（省约 300MB），请改用 SenseVoice 内核")
         # 优先用本地缓存快照，避免 huggingface_hub 网络校验（av/hub 兼容性问题绕坑）
         model_id = size
         root = os.path.join(os.path.expanduser("~"), ".cache", "toolbox-whisper")
@@ -1322,3 +1325,4 @@ async def index():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("TOOLBOX_PORT", "8081")))
+
