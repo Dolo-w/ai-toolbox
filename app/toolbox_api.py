@@ -21,9 +21,6 @@ import tempfile
 import subprocess
 import traceback
 
-# HuggingFace 国内镜像（whisper 模型下载用）
-os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
-
 import cv2
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, Form
@@ -64,37 +61,8 @@ def decode_upload(data: bytes):
 
 
 # ============================================================
-# 字幕转写（默认 SenseVoice 内核，whisper 备选）
+# 字幕转写（SenseVoice 内核，sherpa-onnx，随包分发）
 # ============================================================
-_whisper_models = {}
-
-
-def get_whisper_model(size: str):
-    if size not in ("tiny", "base", "small", "medium"):
-        size = "small"
-    if size not in _whisper_models:
-        try:
-            from faster_whisper import WhisperModel
-        except ImportError:
-            raise RuntimeError("Whisper 内核已从便携包移除（省约 300MB），请改用 SenseVoice 内核")
-        # 优先用本地缓存快照，避免 huggingface_hub 网络校验（av/hub 兼容性问题绕坑）
-        model_id = size
-        root = os.path.join(os.path.expanduser("~"), ".cache", "toolbox-whisper")
-        repo_dir = os.path.join(root, f"models--Systran--faster-whisper-{size}", "snapshots")
-        if os.path.isdir(repo_dir):
-            for d in os.listdir(repo_dir):
-                if os.path.exists(os.path.join(repo_dir, d, "model.bin")):
-                    model_id = os.path.join(repo_dir, d)
-                    break
-        else:
-            # 缓存目录都没有 → 本次要现场下载，提前说一声（下载发生在首次加载里）
-            print(f"[whisper] {size} 无本地缓存，将从 hf-mirror 下载…", flush=True)
-        _whisper_models[size] = WhisperModel(
-            model_id, device="cpu", compute_type="int8",
-        )
-    return _whisper_models[size]
-
-
 # SenseVoice 内核（sherpa-onnx，int8 约 230MB，随包分发无需下载）
 SENSEVOICE_DIR = os.path.join(BASE_DIR, "models", "sensevoice")
 _sv_recognizer = None
@@ -216,7 +184,7 @@ async def progress(task_id: str):
     return {"status": True, **t}
 
 
-# 繁体 -> 简体（whisper 中文识别极易输出繁体，opencc 兜底转换）
+# 繁体 -> 简体（中文语音识别容易输出繁体，opencc 兜底转换）
 _t2s = None
 
 def _get_t2s():
@@ -240,7 +208,7 @@ def _to_simplified(text: str) -> str:
         return text
 
 
-# whisper 中文输出的半角标点转全角（观感自然）
+# 中文输出的半角标点转全角（观感自然）
 _ZH_PUNCT = str.maketrans({",": "，", ".": "。", "?": "？", "!": "！",
                            ":": "：", ";": "；"})
 
@@ -270,7 +238,7 @@ def _display_width(s: str) -> float:
 def _refine_segments(raw_segments, max_chars: float = 18.0):
     """
     字幕排版整形：
-    1) 用词级时间戳收紧每条字幕的起止（解决 whisper 段尾拖音、音画不同步）
+    1) 用词级时间戳收紧每条字幕的起止（解决段尾拖音、音画不同步）
     2) 超过 max_chars 全角宽的长句，在词边界切成多条短字幕
        （每条时间随词戳精确分配，且单条单行绝不超出画面宽度）
     """
@@ -385,8 +353,6 @@ def _do_transcribe(tid: str, data: bytes, model_size: str, language: str,
             f.write(data)
         _extract_audio(src, wav)
 
-        if engine == "whisper":
-            return _transcribe_whisper(tid, wav, model_size, language, hotwords)
         return _transcribe_sensevoice(tid, wav, hotwords)
 
 
@@ -472,65 +438,6 @@ def _transcribe_sensevoice(tid: str, wav: str, hotwords: str):
     return _pack_result(segments, texts, lang_tag, round(total, 1))
 
 
-def _transcribe_whisper(tid: str, wav: str, model_size: str, language: str,
-                        hotwords: str):
-    """Whisper 内核（备选）：其他语种 / 原生热词支持"""
-    _task_set(tid, phase="model", progress=3,
-              message="加载语音模型…（首次使用需下载，请耐心等待）")
-    model = get_whisper_model(model_size)
-    kwargs = dict(vad_filter=True, beam_size=5, word_timestamps=True)
-    if language == "zh":
-        # 简体偏向提示词：不给时 whisper 中文极易输出繁体（训练数据繁体占比高）
-        kwargs["initial_prompt"] = "以下是普通话的句子。"
-    # 热词表：内置表 + 请求补充，专治同音错别字（faster-whisper 原生 hotwords）
-    hw = _load_hotwords(hotwords)
-    if hw:
-        kwargs["hotwords"] = " ".join(hw)
-    _task_set(tid, phase="asr", progress=5, message="语音识别中…")
-    seg_iter, info = model.transcribe(
-        wav, language=None if language in ("auto", "", None) else language,
-        **kwargs,
-    )
-    raw, texts = [], []
-    for seg in seg_iter:
-        text = seg.text.strip()
-        if not text:
-            continue
-        if info.language == "zh":
-            # auto 模式检测到中文同样转简体；非中文不受影响
-            text = _zh_normalize(_to_simplified(text))
-            words = [
-                {"word": _zh_normalize(_to_simplified(w.word)),
-                 "start": w.start, "end": w.end}
-                for w in (seg.words or [])
-            ]
-        else:
-            words = [
-                {"word": w.word, "start": w.start, "end": w.end}
-                for w in (seg.words or [])
-            ]
-        raw.append({
-            "start": seg.start, "end": seg.end, "text": text, "words": words,
-        })
-        texts.append(text)
-        if info.duration > 0:
-            # 识别阶段 5% -> 92%
-            p = min(92, 5 + 87 * min(1.0, seg.end / info.duration))
-            asr_pct = int((p - 5) / 87 * 100)
-            _task_set(tid, progress=int(p), message=f"语音识别中 {asr_pct}%")
-
-    # 排版整形：词戳收紧边界 + 超宽切条（_refine_segments 保证不超画面宽度）
-    segments = _refine_segments(raw)
-    # 拼音热词后处理兜底（与 SenseVoice 行为一致）
-    hw_str = _load_hotwords(hotwords)
-    if hw_str:
-        for s in segments:
-            s["text"] = _hotword_fix(s["text"], hw_str)
-        texts = [_hotword_fix(t, hw_str) for t in texts]
-    _task_set(tid, progress=94, message="整理字幕…")
-    return _pack_result(segments, texts, info.language, round(info.duration, 1))
-
-
 def _run_transcribe(tid: str, data: bytes, model_size: str, language: str,
                     hotwords: str = "", engine: str = "sensevoice"):
     try:
@@ -554,7 +461,6 @@ async def transcribe(
     if not data:
         return JSONResponse({"status": False, "message": "未收到文件"})
     tid = _task_new("asr", "准备中…")
-    # whisper 模型首次运行会从 hf-mirror 下载（small 约 484MB），放后台线程跑
     threading.Thread(
         target=_run_transcribe, args=(tid, data, model_size, language, hotwords),
         daemon=True,
@@ -1325,4 +1231,5 @@ async def index():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("TOOLBOX_PORT", "8081")))
+
 
