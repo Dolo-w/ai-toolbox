@@ -100,7 +100,7 @@ pyinstaller xiaoGongJuXiang.spec
 
 本项目代码使用 [MIT](LICENSE)。
 
-第三方组件遵循各自协议，**分发时请一并保留**：
+第三方组件遵循各自协议，**分发时请一并保留**（完整清单见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）：
 
 | 组件 | 协议 |
 |---|---|
@@ -120,3 +120,4 @@ pyinstaller xiaoGongJuXiang.spec
 - 超分需要带 `dnn_superres` 的 OpenCV 构建（`opencv-contrib-python`）；
   官方 `opencv-python` 没有这个模块，会退化到插值。
 - 老照片修复只做放大增强，不做人脸修复、划痕修补。
+

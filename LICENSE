@@ -19,17 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Third-party components are distributed under their own licenses:
-
-- HivisionIDPhotos — Apache License 2.0
-- faster-whisper — MIT
-- SenseVoice / sherpa-onnx — Apache License 2.0
-- EDSR, FSRCNN models — Apache License 2.0
-- OpenCV — Apache License 2.0
-- HarmonyOS Sans font — HarmonyOS Sans Font License (commercial use allowed,
-  cannot be sold standalone)
-
-Models and fonts are not included in this repository.
