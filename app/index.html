@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>小工具箱 · 本机 AI 图像与字幕</title>
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --border: #e5e7eb;
+    --text: #1f2328; --text2: #656d76; --accent: #185fa5; --accent-soft: #e6f1fb;
+    --ok: #0f6e56; --ok-soft: #e1f5ee; --warn: #854f0b; --warn-soft: #faeeda;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 60px; }
+  header { display: flex; align-items: center; gap: 10px; padding: 8px 0 20px; }
+  header h1 { font-size: 20px; font-weight: 500; }
+  .status { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #d1242f; }
+  .dot.on { background: var(--ok); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; cursor: pointer; transition: border-color .15s; }
+  .card:hover { border-color: var(--accent); }
+  .card.active { border-color: var(--accent); background: var(--accent-soft); }
+  .card .icon { font-size: 24px; margin-bottom: 6px; }
+  .card .name { font-size: 14px; font-weight: 500; }
+  .card .desc { font-size: 12px; color: var(--text2); }
+  .card .tag { display: inline-block; margin-top: 8px; font-size: 11px; padding: 1px 8px; border-radius: 999px; }
+  .tag.ok { background: var(--ok-soft); color: var(--ok); }
+  .panel-box { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+  .tool-panel { display: none; }
+  .tool-panel.show { display: block; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; }
+  .left { flex: 1 1 320px; }
+  .right { flex: 1 1 360px; }
+  .drop { border: 2px dashed var(--border); border-radius: 12px; padding: 36px 16px; text-align: center; color: var(--text2); cursor: pointer; }
+  .drop:hover { border-color: var(--accent); }
+  .drop img { max-width: 100%; max-height: 280px; border-radius: 8px; }
+  label.sec { display: block; font-size: 13px; font-weight: 500; margin: 16px 0 8px; }
+  select, button, textarea { font-size: 14px; border-radius: 8px; border: 1px solid var(--border); padding: 8px 12px; background: #fff; color: var(--text); }
+  select { width: 100%; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .sw { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; }
+  .sw.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  input[type=color] { width: 36px; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+  .go { width: 100%; margin-top: 20px; padding: 12px; background: var(--accent); border: none; color: #fff; font-size: 15px; cursor: pointer; }
+  .go:disabled { opacity: .5; cursor: wait; }
+  .result { text-align: center; }
+  .preview-box { display: inline-block; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 0 0/16px 16px; max-width: 100%; }
+  .preview-box img, .preview-box canvas-wrap { display: block; max-width: 340px; }
+  .btns { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+  .dl { background: var(--ok); border: none; color: #fff; padding: 9px 16px; cursor: pointer; font-size: 14px; }
+  .dl.alt { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  .msg { margin-top: 12px; font-size: 13px; padding: 8px 12px; border-radius: 8px; display: none; }
+  .msg.err { background: #fcebeb; color: #a32d2d; display: block; }
+  .msg.hint { background: var(--accent-soft); color: var(--accent); display: block; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: r 0.8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  /* 任务进度条 */
+  .pbar-row { margin-top: 10px; }
+  .pbar-track { height: 10px; background: rgba(128,128,128,.18); border-radius: 5px; overflow: hidden; }
+  .pbar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 5px; transition: width .35s ease; }
+  .pbar-fill.done { background: var(--ok); }
+  .pbar-fill.fail { background: #a32d2d; }
+  .pbar-text { font-size: 12px; color: var(--text2); margin-top: 5px; }
+  textarea { width: 100%; min-height: 180px; resize: vertical; font-family: inherit; }
+  /* 消除笔 */
+  .erase-stage { position: relative; display: inline-block; max-width: 100%; }
+  .erase-stage img { display: block; max-width: 400px; max-height: 400px; border-radius: 8px; user-select: none; -webkit-user-drag: none; }
+  .erase-stage canvas { position: absolute; left: 0; top: 0; cursor: crosshair; }
+  .erase-empty { border: 2px dashed var(--border); border-radius: 12px; min-height: 340px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text2); font-size: 14px; text-align: center; padding: 16px; }
+  .erase-empty small { font-size: 12px; margin-top: 8px; }
+  #panel-erase .preview-box img { max-width: 400px; }
+  #panel-erase .drop { padding: 24px 16px; }
+  input[type=range] { width: 100%; }
+  .tip { font-size: 12px; color: var(--text2); margin-top: 8px; }
+  /* 磁盘体检 */
+  .disk-pick { padding: 8px 20px; }
+  .disk-pick.sel { background: var(--accent-soft); color: var(--accent); }
+  .disk-sec { margin-top: 22px; }
+  .disk-sec h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+  .disk-bar-row { display: flex; align-items: center; gap: 10px; margin: 5px 0; font-size: 13px; }
+  .disk-bar-row .lbl { width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .disk-bar-row .lbl:hover { color: var(--accent); }
+  .disk-bar-row .bar-wrap { flex: 1; height: 14px; background: var(--bg); border-radius: 7px; overflow: hidden; }
+  .disk-bar-row .bar { height: 100%; background: var(--accent); border-radius: 7px; }
+  .disk-bar-row .val { width: 90px; text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
+  .disk-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .disk-tbl th { text-align: left; padding: 6px 10px; border-bottom: 2px solid var(--border); color: var(--text2); font-weight: 500; }
+  .disk-tbl td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+  .disk-tbl td.path { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .disk-badge { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+  .disk-badge.clean { background: var(--ok-soft); color: var(--ok); }
+  .disk-badge.confirm { background: var(--warn-soft); color: var(--warn); }
+  .disk-badge.system { background: var(--bg); color: var(--text2); border: 1px solid var(--border); }
+  .disk-open { font-size: 12px; padding: 3px 10px; border: 1px solid var(--border); background: #fff; cursor: pointer; border-radius: 6px; }
+  .disk-open:hover { border-color: var(--accent); color: var(--accent); }
+  .disk-clean { background: #fff7f7; border-color: #f0c4c4; color: #a32d2d; margin-left: 4px; }
+  .disk-clean:hover { border-color: #d1242f; background: #fcebeb; }
+  .disk-kpi { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .disk-kpi .kpi { flex: 1 1 160px; background: var(--bg); border-radius: 12px; padding: 14px 16px; }
+  .disk-kpi .kpi .num { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .disk-kpi .kpi .cap { font-size: 12px; color: var(--text2); }
+  .disk-drill { margin: 4px 0 0 210px; font-size: 12px; color: var(--text2); }
+  .disk-drill summary { cursor: pointer; }
+  footer { margin-top: 28px; font-size: 12px; color: var(--text2); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🧰 小工具箱</h1>
+    <span class="status"><span class="dot" id="dot"></span><span id="stText">检测服务中…</span></span>
+  </header>
+
+  <div class="cards">
+    <div class="card active" data-tool="photo">
+      <div class="icon">📷</div><div class="name">AI 证件照</div>
+      <div class="desc">抠图 · 换底 · 排版打印</div><span class="tag ok">可用</span>
+    </div>
+    <div class="card" data-tool="srt">
+      <div class="icon">🎬</div><div class="name">视频字幕</div>
+      <div class="desc">语音转写 · 自动上字幕</div><span class="tag ok">可用</span>
+    </div>
+    <div class="card" data-tool="erase">
+      <div class="icon">🪄</div><div class="name">图片消除笔</div>
+      <div class="desc">擦水印 · 擦路人 · 擦杂物</div><span class="tag ok">可用</span>
+    </div>
+    <div class="card" data-tool="fix">
+      <div class="icon">🖼️</div><div class="name">老照片修复</div>
+      <div class="desc">放大 4 倍 · 增强 · 提清晰</div><span class="tag ok">可用</span>
+    </div>
+    <div class="card" data-tool="disk">
+      <div class="icon">🩺</div><div class="name">磁盘体检</div>
+      <div class="desc">只读扫描 · 找大文件 · 可清理项</div><span class="tag ok">可用</span>
+    </div>
+  </div>
+
+  <!-- ==================== 证件照 ==================== -->
+  <div class="panel-box tool-panel show" id="panel-photo">
+    <div class="row">
+      <div class="left">
+        <div class="drop" id="drop">点击或拖拽上传照片<br><small>支持 JPG / PNG，正脸效果最佳</small></div>
+        <input type="file" id="file" accept="image/*" hidden>
+        <label class="sec">证件规格</label>
+        <select id="spec">
+          <option value="295x413">一寸 295×413</option>
+          <option value="413x579">二寸 413×579</option>
+          <option value="354x472">小二寸 354×472</option>
+          <option value="390x567">社保照 390×567</option>
+        </select>
+        <label class="sec">背景颜色</label>
+        <div class="swatches" id="swatches">
+          <div class="sw sel" data-c="#FFFFFF" style="background:#fff"></div>
+          <div class="sw" data-c="#438EDB" style="background:#438edb"></div>
+          <div class="sw" data-c="#FF0000" style="background:#f00"></div>
+          <div class="sw" data-c="#19416D" style="background:#19416d"></div>
+          <input type="color" id="picker" value="#438edb" title="自定义颜色">
+        </div>
+        <label class="sec">底色样式</label>
+        <select id="render">
+          <option value="0">纯色</option>
+          <option value="1">上下渐变</option>
+          <option value="2">中心渐变</option>
+        </select>
+        <button class="go" id="go" disabled>生成证件照</button>
+        <div class="msg" id="msg"></div>
+      </div>
+      <div class="right result" id="resultBox" style="display:none">
+        <label class="sec" style="text-align:left">生成结果（300DPI）</label>
+        <div class="preview-box"><img id="preview" alt="证件照预览"></div>
+        <div class="btns">
+          <button class="dl" id="dlSingle">下载单照</button>
+          <button class="dl alt" id="dlLayout">下载六寸排版照</button>
+        </div>
+        <p style="font-size:12px;color:var(--text2);margin-top:10px">换底色即时生效，下载时应用所选颜色</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 视频字幕 ==================== -->
+  <div class="panel-box tool-panel" id="panel-srt">
+    <div class="row">
+      <div class="left">
+        <div class="drop" id="dropSrt">点击或拖拽上传音频 / 视频<br><small>支持 mp4 / mp3 / wav / m4a / mov 等，首次使用需下载模型</small></div>
+        <input type="file" id="fileSrt" accept="audio/*,video/*" hidden>
+        <label class="sec">识别内核</label>
+        <select id="srtEngine">
+          <option value="sensevoice" selected>SenseVoice（推荐，快 30 倍，中文更准，自带标点）</option>
+          <option value="whisper">Whisper（小语种 / 更高精度可选模型档）</option>
+        </select>
+        <label class="sec" id="srtModelLabel">Whisper 模型精度</label>
+        <select id="srtModel">
+          <option value="small" selected>高精度（small，约 484MB，推荐，错字更少）</option>
+          <option value="base">均衡（base，约 145MB，速度更快）</option>
+          <option value="medium">最高精度（medium，约 1.5GB，首次下载较久）</option>
+          <option value="tiny">极速（tiny，约 75MB，错字较多）</option>
+        </select>
+        <label class="sec">语言</label>
+        <select id="srtLang">
+          <option value="auto" selected>自动检测</option>
+          <option value="zh">中文</option>
+          <option value="en">英文</option>
+          <option value="ja">日语</option>
+        </select>
+        <p class="tip" style="text-align:left;margin-top:-4px">错别字自动纠错：内置热词表（工具箱目录 hotwords.txt，可自行添加人名/术语）</p>
+        <label class="sec">字幕样式（烧录时生效）</label>
+        <select id="srtFont" style="margin-top:0"></select>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <button class="dl alt" id="importFontBtn" style="width:auto;flex:1;margin:0;padding:6px 10px">＋ 导入字体</button>
+          <input type="file" id="fontFile" accept=".ttf,.otf,.ttc" hidden>
+        </div>
+        <label class="sec">字号 <span id="srtFontSizeVal" style="color:var(--accent)">18</span></label>
+        <input type="range" id="srtFontSize" min="10" max="40" value="18">
+        <label class="sec">字体颜色</label>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
+          <div style="display:flex;gap:6px" id="colorPresets"></div>
+          <input type="color" id="srtColor" value="#ffffff" style="width:36px;height:30px;padding:0;border:none;background:none;cursor:pointer" title="自定义颜色">
+        </div>
+        <button class="go" id="goSrt" disabled>开始转写</button>
+        <div class="pbar-row" id="pbarSrt" style="display:none">
+          <div class="pbar-track"><div class="pbar-fill" id="pbarSrtFill"></div></div>
+          <div class="pbar-text" id="pbarSrtText"></div>
+        </div>
+        <div class="msg" id="msgSrt"></div>
+      </div>
+      <div class="right result" id="srtBox" style="display:none">
+        <label class="sec" style="text-align:left">转写结果</label>
+        <div id="srtMeta" style="font-size:12px;color:var(--text2);text-align:left"></div>
+        <textarea id="srtText" spellcheck="false" style="margin-top:8px"></textarea>
+        <div class="btns">
+          <button class="dl" id="burnBtn" style="display:none">🎬 生成带字幕视频</button>
+          <button class="dl" id="dlSrt">下载 SRT 字幕</button>
+          <button class="dl alt" id="dlTxt">下载纯文本</button>
+        </div>
+        <p class="tip" style="text-align:left">SRT 可直接导入剪映 / PR / 视频号后台；上传视频时可直接把字幕烧进画面</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 消除笔 ==================== -->
+  <div class="panel-box tool-panel" id="panel-erase">
+    <div class="drop" id="dropErase" style="margin-bottom:20px">点击或拖拽上传图片<br><small>在图上涂抹要擦除的区域，支持反复涂抹、多次擦除</small></div>
+    <input type="file" id="fileErase" accept="image/*" hidden>
+    <div class="row">
+      <div class="left" id="eraseEditCol" style="display:none">
+        <label class="sec">① 涂抹要擦除的区域（红色区域将被擦除）</label>
+        <div class="erase-stage" id="eraseStage">
+          <img id="eraseImg" alt="待擦除图片">
+          <canvas id="eraseCanvas"></canvas>
+        </div>
+        <label class="sec">笔刷大小 <span id="brushVal" style="color:var(--accent)">30</span> px</label>
+        <input type="range" id="brush" min="8" max="90" value="30">
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button class="go" id="goErase" style="margin-top:0;width:auto;flex:1" disabled>🪄 擦除涂抹区域</button>
+          <button class="dl alt" id="undoMask" hidden>清除涂抹</button>
+          <button class="dl alt" id="resetErase" hidden>换一张</button>
+        </div>
+        <div class="msg" id="msgErase"></div>
+      </div>
+      <div class="right" id="eraseResultCol">
+        <label class="sec" style="text-align:left">② 擦除结果</label>
+        <div class="erase-empty" id="eraseEmpty">结果会显示在这里<br><small>涂抹后点左侧「擦除涂抹区域」</small></div>
+        <div class="preview-box" id="erasePreviewBox" style="display:none"><img id="erasePreview" alt="擦除结果"></div>
+        <div class="btns" id="eraseDlBtns" style="display:none">
+          <button class="dl" id="dlErase">下载结果图</button>
+        </div>
+        <p class="tip" style="text-align:left">算法：OpenCV Telea 修复，适合水印/路人/小杂物；大面积区域建议分多次涂抹</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 老照片修复 ==================== -->
+  <div class="panel-box tool-panel" id="panel-fix">
+    <div class="row">
+      <div class="left">
+        <div class="drop" id="dropFix">点击或拖拽上传老照片 / 模糊小图<br><small>输出放大 4 倍的增强图</small></div>
+        <input type="file" id="fileFix" accept="image/*" hidden>
+        <label class="sec">放大倍数</label>
+        <select id="fixScale">
+          <option value="4" selected>4 倍（推荐）</option>
+          <option value="2">2 倍</option>
+        </select>
+        <div class="tip" id="fixInfo" style="margin-top:6px"></div>
+        <button class="go" id="goFix" disabled>✨ 放大增强</button>
+        <div class="msg" id="msgFix"></div>
+      </div>
+      <div class="right result" id="fixBox" style="display:none">
+        <label class="sec" style="text-align:left">修复结果</label>
+        <div class="preview-box"><img id="fixPreview" alt="修复结果" style="max-width:340px"></div>
+        <div class="btns"><button class="dl" id="dlFix">下载修复图</button></div>
+        <p class="tip" style="text-align:left" id="fixEngine"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 磁盘体检 ==================== -->
+  <div class="panel-box tool-panel" id="panel-disk">
+    <div id="diskEntry">
+      <label class="sec" style="margin-top:0">① 选择要体检的磁盘 / 目录</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <div style="display:flex;gap:10px;flex-wrap:wrap" id="diskDrives"></div>
+        <input type="text" id="diskPath" placeholder="或输入任意路径，如 D:\App" style="flex:1;min-width:220px;padding:8px 12px">
+        <button class="dl" id="goDisk">🩺 开始体检</button>
+      </div>
+      <p class="tip">全程<b>只读扫描</b>，不动任何文件。C 盘文件多，扫描约 1~5 分钟，可切到别的工具等结果。</p>
+      <div class="msg" id="msgDisk"></div>
+    </div>
+    <div id="diskProgress" style="display:none">
+      <label class="sec">⏳ 扫描中…</label>
+      <div style="font-size:13px;color:var(--text2)" id="diskProgText"></div>
+    </div>
+    <div id="diskReport" style="display:none"></div>
+  </div>
+
+  <footer>引擎：HivisionIDPhotos（Apache-2.0）· faster-whisper（MIT）· OpenCV dnn_superres / inpaint（Apache-2.0）<br>所有图片音频仅在本机处理，绝不上传云端</footer>
+</div>
+<script>
+const API = "http://127.0.0.1:8080";   // 证件照
+const API2 = "http://127.0.0.1:8081";  // 字幕/消除/放大
+const $ = id => document.getElementById(id);
+
+// ========== 工具页切换 ==========
+document.querySelectorAll(".card").forEach(c => c.onclick = () => {
+  document.querySelectorAll(".card").forEach(x => x.classList.remove("active"));
+  c.classList.add("active");
+  document.querySelectorAll(".tool-panel").forEach(p => p.classList.remove("show"));
+  $("panel-" + c.dataset.tool).classList.add("show");
+  if (c.dataset.tool === "disk") loadDrives();  // 每次进入都刷新盘符（U盘/移动硬盘即插即扫）
+});
+
+// ========== 通用工具 ==========
+function stripB64(b64) {
+  return (b64 || "").startsWith("data:") ? b64.slice(b64.indexOf(",") + 1) : (b64 || "");
+}
+function b64ToFile(b64, name) {
+  const bin = atob(stripB64(b64)), arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: "image/png" });
+}
+function saveBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  URL.revokeObjectURL(a.href);
+}
+function showMsg(box, t, cls) { const m = $(box); m.textContent = t; m.className = "msg " + cls; }
+function hideMsg(box) { $(box).className = "msg"; }
+function bindDrop(dropId, fileId, cb) {
+  const fi = $(fileId);
+  $(dropId).onclick = () => fi.click();
+  fi.onchange = e => { if (e.target.files[0]) cb(e.target.files[0]); };
+  $(dropId).ondragover = e => e.preventDefault();
+  $(dropId).ondrop = e => {
+    e.preventDefault();
+    if (e.dataTransfer.files[0]) { fi.files = e.dataTransfer.files; cb(e.dataTransfer.files[0]); }
+  };
+}
+
+// ========== 服务状态 ==========
+async function pingOne(api) {
+  try { await fetch(api + "/docs", { method: "HEAD" }); return true; } catch { return false; }
+}
+async function ping() {
+  const [a, b] = await Promise.all([pingOne(API), pingOne(API2)]);
+  if (a && b) { $("dot").classList.add("on"); $("stText").textContent = "全部服务运行中"; enableAll(true); }
+  else if (a || b) { $("dot").classList.remove("on"); $("stText").textContent = (a ? "证件照" : "工具箱") + "服务未启动，部分功能不可用"; setTimeout(ping, 5000); }
+  else { $("stText").textContent = "服务未启动（等待中）"; setTimeout(ping, 3000); }
+}
+function enableAll(on) {
+  $("go").disabled = !(on && file);
+  $("goSrt").disabled = !(on && srtFile);
+  $("goFix").disabled = !(on && fixFile);
+  $("goErase").disabled = !(on && eraseImgSrc);
+}
+ping();
+
+// ==================================================================
+// 工具一：证件照（8080）
+// ==================================================================
+let file = null, standardB64 = null, hdB64 = null;
+
+bindDrop("drop", "file", f => {
+  file = f;
+  $("drop").innerHTML = "";
+  const img = new Image();
+  img.src = URL.createObjectURL(f);
+  $("drop").appendChild(img);
+  $("go").disabled = false;
+});
+
+let color = "#FFFFFF";
+document.querySelectorAll("#swatches .sw").forEach(sw => sw.onclick = () => {
+  document.querySelectorAll("#swatches .sw").forEach(s => s.classList.remove("sel"));
+  sw.classList.add("sel"); color = sw.dataset.c; applyBg();
+});
+$("picker").oninput = e => {
+  document.querySelectorAll("#swatches .sw").forEach(s => s.classList.remove("sel"));
+  color = e.target.value; applyBg();
+};
+function applyBg() {
+  if (standardB64) $("preview").style.background = $("render").value === "0" ? color : "transparent";
+}
+$("render").onchange = () => { if ($("render").value !== "0") showMsg("msg", "渐变底色将在下载时应用", "hint"); else applyBg(); };
+
+$("go").onclick = async () => {
+  hideMsg("msg");
+  if (!file) return showMsg("msg", "请先上传照片", "err");
+  const [w, h] = $("spec").value.split("x");
+  $("go").disabled = true;
+  $("go").innerHTML = '<span class="spin"></span>AI 抠图生成中…';
+  try {
+    const fd = new FormData();
+    fd.append("input_image", file);
+    fd.append("width", w); fd.append("height", h);
+    fd.append("hd", "true"); fd.append("dpi", "300");
+    const r = await fetch(API + "/idphoto", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!j.status) throw new Error("未检测到人脸，请换一张正脸清晰的照片");
+    standardB64 = j.image_base64_standard;
+    hdB64 = j.image_base64_hd;
+    $("preview").src = "data:image/png;base64," + stripB64(hdB64);
+    $("preview").style.background = $("render").value === "0" ? color : "transparent";
+    $("resultBox").style.display = "block";
+    showMsg("msg", "生成成功！预览为高清照效果，下载按钮已就绪", "hint");
+  } catch (e) {
+    showMsg("msg", e.message || "生成失败，请确认服务已启动", "err");
+  }
+  $("go").disabled = false;
+  $("go").textContent = "生成证件照";
+};
+
+async function applyBgServer() {
+  const fd = new FormData();
+  fd.append("input_image_base64", stripB64(hdB64));
+  fd.append("color", color.replace("#", ""));
+  fd.append("render", $("render").value);
+  fd.append("dpi", "300");
+  const r = await fetch(API + "/add_background", { method: "POST", body: fd });
+  const j = await r.json();
+  if (!j.status) throw new Error("换底失败");
+  return stripB64(j.image_base64);
+}
+$("dlSingle").onclick = async () => {
+  hideMsg("msg");
+  try {
+    showMsg("msg", "正在应用底色…", "hint");
+    saveBlob(b64ToFile(await applyBgServer(), ""), "证件照_" + $("spec").value + "_" + Date.now() + ".png");
+    hideMsg("msg");
+  } catch (e) { showMsg("msg", e.message, "err"); }
+};
+$("dlLayout").onclick = async () => {
+  hideMsg("msg");
+  try {
+    showMsg("msg", "正在生成六寸排版照…", "hint");
+    const withBg = await applyBgServer();
+    const [w, h] = $("spec").value.split("x");
+    const fd = new FormData();
+    fd.append("input_image_base64", withBg);
+    fd.append("width", w); fd.append("height", h); fd.append("dpi", "300");
+    const r = await fetch(API + "/generate_layout_photos", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!j.status) throw new Error("排版失败");
+    saveBlob(b64ToFile(j.image_base64, ""), "证件照排版_六寸_" + Date.now() + ".png");
+    hideMsg("msg");
+  } catch (e) { showMsg("msg", e.message, "err"); }
+};
+
+// ==================================================================
+// 工具二：视频字幕（8081 /transcribe + /burn 烧录）
+// ==================================================================
+let srtFile = null, srtResult = null;
+
+// ---- 进度条工具：上传 XHR + 任务轮询 ----
+function startPbar(group) {
+  $("pbar" + group).style.display = "block";
+  setPbar(group, 0, "准备中…");
+  $("pbar" + group + "Fill").className = "pbar-fill";
+}
+function setPbar(group, pct, text) {
+  pct = Math.max(0, Math.min(100, pct));
+  $("pbar" + group + "Fill").style.width = pct + "%";
+  $("pbar" + group + "Text").textContent = (text || "") + "  " + Math.round(pct) + "%";
+}
+function finishPbar(group, ok, text) {
+  const fill = $("pbar" + group + "Fill");
+  fill.className = "pbar-fill " + (ok ? "done" : "fail");
+  fill.style.width = ok ? "100%" : fill.style.width;
+  $("pbar" + group + "Text").textContent = text || (ok ? "完成" : "失败");
+}
+
+// fetch 不支持上传进度，用 XHR
+function uploadXhr(url, fd, onPct) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable && onPct) onPct(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      try { resolve(JSON.parse(xhr.responseText)); }
+      catch (e) { reject(new Error("响应异常（HTTP " + xhr.status + "）")); }
+    };
+    xhr.onerror = () => reject(new Error("网络错误，请确认后端已启动"));
+    xhr.send(fd);
+  });
+}
+
+// 轮询任务直至结束：onUpdate(j) 实时回调；结束返回终态 j（失败抛错）
+async function pollTask(taskId, group, offsetPct, onUpdate) {
+  for (;;) {
+    const r = await fetch(API2 + "/progress?task_id=" + encodeURIComponent(taskId));
+    const j = await r.json();
+    if (!j.status) throw new Error(j.message || "任务丢失");
+    if (j.done) {
+      if (j.ok) return j;
+      throw new Error(j.error || j.message || "处理失败");
+    }
+    if (onUpdate) onUpdate(j);
+    await new Promise(res => setTimeout(res, 800));
+  }
+}
+
+const isVideoFile = f =>
+  (f.type && f.type.startsWith("video")) ||
+  /\.(mp4|mov|mkv|avi|webm|flv|m4v|ts)$/i.test(f.name || "");
+
+bindDrop("dropSrt", "fileSrt", f => {
+  srtFile = f;
+  const box = $("dropSrt");
+  box.innerHTML = "";
+  const url = URL.createObjectURL(f);
+  if (isVideoFile(f)) {
+    const v = document.createElement("video");
+    v.src = url;
+    v.controls = true;
+    v.style.maxHeight = "160px";
+    box.appendChild(v);
+  } else {
+    const img = new Image();
+    img.src = url;
+    img.style.maxHeight = "160px";
+    box.appendChild(img);
+  }
+  $("goSrt").disabled = false;
+});
+
+// SenseVoice 内核用不到 whisper 模型档位，选 SenseVoice 时隐藏
+const syncEngineUI = () => {
+  const sv = $("srtEngine").value === "sensevoice";
+  $("srtModel").style.display = sv ? "none" : "";
+  $("srtModelLabel").style.display = sv ? "none" : "";
+};
+$("srtEngine").onchange = syncEngineUI;
+syncEngineUI();
+
+$("goSrt").onclick = async () => {
+  hideMsg("msgSrt");
+  if (!srtFile) return showMsg("msgSrt", "请先上传音频或视频", "err");
+  $("goSrt").disabled = true;
+  $("goSrt").innerHTML = '<span class="spin"></span>上传中…';
+  startPbar("Srt");
+  try {
+    const fd = new FormData();
+    fd.append("file", srtFile);
+    fd.append("engine", $("srtEngine").value);
+    fd.append("model_size", $("srtModel").value);
+    fd.append("language", $("srtLang").value);
+    const j = await uploadXhr(API2 + "/transcribe", fd, pct => {
+      setPbar("Srt", pct * 30, "上传 " + Math.round(pct * 100) + "%");  // 上传占 0-30%
+    });
+    if (!j.status) throw new Error(j.message || "提交失败");
+    const done = await pollTask(j.task_id, "Srt", 30, j2 => {  // 处理占 30-100%
+      setPbar("Srt", 30 + j2.progress * 0.7, j2.message || "处理中…");
+    });
+    const r = done.result || {};
+    srtResult = r;
+    $("srtText").value = r.text || "";
+    $("srtMeta").textContent = `识别语言: ${r.language} ｜ 时长: ${Math.round(r.duration)} 秒 ｜ 共 ${r.count} 条字幕`;
+    $("burnBtn").style.display = isVideoFile(srtFile) ? "" : "none";
+    $("srtBox").style.display = "block";
+    finishPbar("Srt", true, "转写完成！");
+  } catch (e) {
+    finishPbar("Srt", false);
+    showMsg("msgSrt", e.message || "转写失败", "err");
+  }
+  $("goSrt").disabled = false;
+  $("goSrt").textContent = "开始转写";
+};
+$("dlSrt").onclick = () => srtResult && saveBlob(new Blob([srtResult.srt], { type: "text/plain;charset=utf-8" }), "字幕_" + Date.now() + ".srt");
+$("dlTxt").onclick = () => srtResult && saveBlob(new Blob([srtResult.text], { type: "text/plain;charset=utf-8" }), "文稿_" + Date.now() + ".txt");
+
+const SRT_COLORS = ["#ffffff", "#000000", "#ffd400", "#ff5a5a", "#7ee787", "#58c4ff"];
+SRT_COLORS.forEach(c => {
+  const d = document.createElement("div");
+  d.style.cssText = `width:24px;height:24px;border-radius:50%;background:${c};cursor:pointer;border:2px solid rgba(128,128,128,.35)`;
+  d.title = c;
+  d.onclick = () => { $("srtColor").value = c; };
+  $("colorPresets").appendChild(d);
+});
+$("srtFontSize").oninput = e => { $("srtFontSizeVal").textContent = e.target.value; };
+
+async function loadFonts(selectId) {
+  try {
+    const r = await fetch(API2 + "/font/list");
+    const j = await r.json();
+    if (!j.status) return;
+    const sel = $("srtFont");
+    sel.innerHTML = "";
+    j.fonts.forEach(f => {
+      const o = document.createElement("option");
+      o.value = f.id;
+      o.textContent = f.label;
+      sel.appendChild(o);
+    });
+    if (selectId) sel.value = selectId;
+  } catch (e) { /* 静默：字体加载失败不阻塞主功能 */ }
+}
+loadFonts();
+
+$("importFontBtn").onclick = () => $("fontFile").click();
+$("fontFile").onchange = async () => {
+  const f = $("fontFile").files[0];
+  if (!f) return;
+  hideMsg("msgSrt");
+  $("importFontBtn").innerHTML = '<span class="spin"></span>解析中…';
+  try {
+    const fd = new FormData();
+    fd.append("file", f);
+    const r = await fetch(API2 + "/font/upload", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!j.status) throw new Error(j.message || "导入失败");
+    await loadFonts();
+    // 按 family 找到新导入项并选中
+    const sel = $("srtFont");
+    for (const o of sel.options) {
+      if (o.textContent.startsWith(j.family)) { sel.value = o.value; break; }
+    }
+    showMsg("msgSrt", `字体「${j.family}」导入成功`, "hint");
+  } catch (e) {
+    showMsg("msgSrt", e.message || "导入失败", "err");
+  }
+  $("importFontBtn").textContent = "＋ 导入字体";
+  $("fontFile").value = "";
+};
+
+$("burnBtn").onclick = async () => {
+  if (!srtFile || !srtResult) return;
+  hideMsg("msgSrt");
+  $("burnBtn").disabled = true;
+  $("burnBtn").innerHTML = '<span class="spin"></span>上传中…';
+  startPbar("Srt");
+  try {
+    const fd = new FormData();
+    fd.append("file", srtFile);
+    fd.append("srt", srtResult.srt);
+    fd.append("font", $("srtFont").value);
+    fd.append("font_size", $("srtFontSize").value);
+    fd.append("font_color", $("srtColor").value);
+    const j = await uploadXhr(API2 + "/burn", fd, pct => {
+      setPbar("Srt", pct * 20, "上传 " + Math.round(pct * 100) + "%");  // 上传占 0-20%
+    });
+    if (!j.status) throw new Error(j.message || "提交失败");
+    const done = await pollTask(j.task_id, "Srt", 20, j2 => {  // 烧录占 20-100%
+      setPbar("Srt", 20 + j2.progress * 0.8, j2.message || "处理中…");
+    });
+    const r = done.result || {};
+    // 后端已把成品存到 下载\AIToolbox\，自动在资源管理器里定位
+    fetch(API2 + "/reveal", { method: "POST", body: (() => { const f = new FormData(); f.append("path", r.path || ""); return f; })() }).catch(() => {});
+    finishPbar("Srt", true, "已保存到：下载\\AIToolbox\\");
+  } catch (e) {
+    finishPbar("Srt", false);
+    showMsg("msgSrt", e.message || "烧录失败", "err");
+  }
+  $("burnBtn").disabled = false;
+  $("burnBtn").textContent = "🎬 生成带字幕视频";
+};
+
+// ==================================================================
+// 工具三：消除笔（8081 /inpaint）
+// ==================================================================
+let eraseImgSrc = null;       // 当前图（dataURL 或 objectURL）
+let eraseImgBlob = null;      // 当前图的原始数据（File 或 Blob）
+let drawing = false;
+
+function resetEraseResult() {
+  $("eraseEmpty").style.display = "flex";
+  $("erasePreviewBox").style.display = "none";
+  $("eraseDlBtns").style.display = "none";
+}
+
+$("resetErase").onclick = () => {
+  eraseImgBlob = null;
+  eraseImgSrc = null;
+  $("eraseImg").removeAttribute("src");
+  $("goErase").disabled = true;
+  $("undoMask").hidden = true;
+  $("resetErase").hidden = true;
+  $("eraseEditCol").style.display = "none";
+  $("dropErase").style.display = "block";
+  hideMsg("msgErase");
+  resetEraseResult();
+};
+
+bindDrop("dropErase", "fileErase", f => {
+  eraseImgBlob = f;
+  const url = URL.createObjectURL(f);
+  const img = $("eraseImg");
+  img.onload = () => {
+    // 切换到编辑视图：隐藏上传条，显示涂抹列
+    $("dropErase").style.display = "none";
+    $("eraseEditCol").style.display = "block";
+    $("undoMask").hidden = false;
+    $("resetErase").hidden = false;
+    // 先显示再同步画布尺寸（display:none 时 clientWidth 恒为 0）
+    requestAnimationFrame(() => {
+      const cv = $("eraseCanvas");
+      cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+      cv.style.width = img.clientWidth + "px";
+      cv.style.height = img.clientHeight + "px";
+      cv.getContext("2d").clearRect(0, 0, cv.width, cv.height);
+    });
+    resetEraseResult();
+  };
+  img.src = url;
+  eraseImgSrc = url;
+  $("goErase").disabled = false;
+  showMsg("msgErase", "已加载，请在图上涂抹要擦除的区域", "hint");
+});
+
+$("brush").oninput = e => $("brushVal").textContent = e.target.value;
+
+const ecv = $("eraseCanvas");
+function canvasPos(e) {
+  const rect = ecv.getBoundingClientRect();
+  const sx = ecv.width / rect.width, sy = ecv.height / rect.height;
+  return [(e.clientX - rect.left) * sx, (e.clientY - rect.top) * sy];
+}
+function drawDot(e) {
+  const [x, y] = canvasPos(e);
+  const ctx = ecv.getContext("2d");
+  ctx.fillStyle = "rgba(255,32,32,0.55)";
+  ctx.beginPath();
+  ctx.arc(x, y, $("brush").value / 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+ecv.onpointerdown = e => { drawing = true; ecv.setPointerCapture(e.pointerId); drawDot(e); };
+ecv.onpointermove = e => { if (drawing) drawDot(e); };
+ecv.onpointerup = () => drawing = false;
+$("undoMask").onclick = () => {
+  const ctx = ecv.getContext("2d");
+  ctx.clearRect(0, 0, ecv.width, ecv.height);
+};
+
+$("goErase").onclick = async () => {
+  hideMsg("msgErase");
+  if (!eraseImgBlob) return showMsg("msgErase", "请先上传图片", "err");
+  const maskData = ecv.toDataURL("image/png");
+  // 检查是否有笔迹
+  const ctx = ecv.getContext("2d");
+  const d = ctx.getImageData(0, 0, ecv.width, ecv.height).data;
+  let hasInk = false;
+  for (let i = 3; i < d.length; i += 4) { if (d[i] > 10) { hasInk = true; break; } }
+  if (!hasInk) return showMsg("msgErase", "请先在图上涂抹要擦除的区域", "err");
+
+  $("goErase").disabled = true;
+  $("goErase").innerHTML = '<span class="spin"></span>AI 擦除中…';
+  try {
+    const fd = new FormData();
+    fd.append("image", eraseImgBlob);
+    const maskBlob = await new Promise(res => ecv.toBlob(res, "image/png"));
+    fd.append("mask", maskBlob);
+    const r = await fetch(API2 + "/inpaint", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!j.status) throw new Error(j.message || "擦除失败");
+    // 用结果图替换当前图，支持反复擦除
+    const bin = atob(stripB64(j.image_base64));
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const outBlob = new Blob([arr], { type: "image/png" });
+    eraseImgBlob = outBlob;
+    const outUrl = URL.createObjectURL(outBlob);
+    $("erasePreview").src = outUrl;
+    $("eraseEmpty").style.display = "none";
+    $("erasePreviewBox").style.display = "inline-block";
+    $("eraseDlBtns").style.display = "flex";
+    // 把结果图装载回编辑区
+    $("fileErase").files = new DataTransfer().files; // 清空 input
+    const img = $("eraseImg");
+    img.onload = () => {
+      requestAnimationFrame(() => {
+        ecv.width = img.naturalWidth; ecv.height = img.naturalHeight;
+        ecv.style.width = img.clientWidth + "px";
+        ecv.style.height = img.clientHeight + "px";
+        ecv.getContext("2d").clearRect(0, 0, ecv.width, ecv.height);
+      });
+    };
+    img.src = outUrl;
+    eraseImgSrc = outUrl;
+    showMsg("msgErase", "擦除完成！可以继续涂抹擦除其他区域，满意后点下载", "hint");
+  } catch (e) {
+    showMsg("msgErase", e.message || "擦除失败", "err");
+  }
+  $("goErase").disabled = false;
+  $("goErase").textContent = "🪄 擦除涂抹区域";
+};
+$("dlErase").onclick = () => {
+  if ($("erasePreview").src) {
+    fetch($("erasePreview").src).then(r => r.blob()).then(b => saveBlob(b, "擦除结果_" + Date.now() + ".png"));
+  }
+};
+
+// ==================================================================
+// 工具四：老照片修复放大（8081 /upscale）
+// ==================================================================
+let fixFile = null;
+
+bindDrop("dropFix", "fileFix", f => {
+  fixFile = f;
+  $("dropFix").innerHTML = "";
+  const img = new Image();
+  img.onload = () => $("fixInfo").textContent = `原图 ${img.naturalWidth}×${img.naturalHeight}，放大后约 ${img.naturalWidth * 4}×${img.naturalHeight * 4}`;
+  img.src = URL.createObjectURL(f);
+  $("dropFix").appendChild(img);
+  $("goFix").disabled = false;
+});
+$("fixScale").onchange = () => { $("goFix").disabled = !(fixFile); };
+
+$("goFix").onclick = async () => {
+  hideMsg("msgFix");
+  if (!fixFile) return showMsg("msgFix", "请先上传图片", "err");
+  $("goFix").disabled = true;
+  $("goFix").innerHTML = '<span class="spin"></span>AI 放大增强中，大图约需 10-60 秒…';
+  try {
+    const fd = new FormData();
+    fd.append("image", fixFile);
+    fd.append("scale", $("fixScale").value);
+    const r = await fetch(API2 + "/upscale", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!j.status) throw new Error(j.message || "修复失败");
+    $("fixPreview").src = "data:image/png;base64," + stripB64(j.image_base64);
+    $("fixEngine").textContent = `引擎: ${j.engine} 超分模型 ｜ 已放大 ${$("fixScale").value} 倍`;
+    $("fixBox").style.display = "block";
+    showMsg("msgFix", "修复完成！", "hint");
+  } catch (e) {
+    showMsg("msgFix", e.message || "修复失败", "err");
+  }
+  $("goFix").disabled = false;
+  $("goFix").textContent = "✨ 放大增强";
+};
+$("dlFix").onclick = () => {
+  if ($("fixPreview").src) {
+    fetch($("fixPreview").src).then(r => r.blob()).then(b => saveBlob(b, "修复放大_" + Date.now() + ".png"));
+  }
+};
+
+// ========== 磁盘体检 ==========
+let diskScanId = null;
+let diskTimer = null;
+
+function fmtGB(n) {
+  if (n >= 1024 ** 3) return (n / 1024 ** 3).toFixed(1) + " GB";
+  if (n >= 1024 ** 2) return (n / 1024 ** 2).toFixed(0) + " MB";
+  return (n / 1024).toFixed(0) + " KB";
+}
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function openInExplorer(path) {
+  const fd = new FormData();
+  fd.append("path", path);
+  fetch(API2 + "/api/disk/open", { method: "POST", body: fd });
+}
+
+async function startDiskScan(target) {
+  showMsg("msgDisk", "已启动扫描: " + target, "hint");
+  try {
+    const fd = new FormData();
+    fd.append("target", target);
+    const r = await fetch(API2 + "/api/disk/scan", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!j.status) throw new Error(j.message || "启动失败");
+    diskScanId = j.scan_id;
+    $("diskEntry").style.display = "none";
+    $("diskReport").style.display = "none";
+    $("diskProgress").style.display = "block";
+    diskTimer = setInterval(pollDisk, 2000);
+  } catch (e) {
+    showMsg("msgDisk", e.message || "启动失败", "err");
+  }
+}
+
+async function pollDisk() {
+  if (!diskScanId) return clearInterval(diskTimer);
+  try {
+    const r = await fetch(API2 + "/api/disk/status?scan_id=" + diskScanId);
+    const j = await r.json();
+    if (!j.status) { clearInterval(diskTimer); return; }
+    $("diskProgText").textContent =
+      `已扫描 ${j.scanned_files.toLocaleString()} 个条目 ｜ 当前: ${j.current || ""}`;
+    if (j.error) {
+      clearInterval(diskTimer);
+      $("diskProgress").style.display = "none";
+      $("diskEntry").style.display = "block";
+      showMsg("msgDisk", "扫描出错: " + j.error, "err");
+      return;
+    }
+    if (j.done) {
+      clearInterval(diskTimer);
+      diskScanId = null;
+      $("diskProgress").style.display = "none";
+      $("diskEntry").style.display = "block";
+      renderDiskReport(j.result);
+    }
+  } catch (e) { /* 网络抖动，下轮再试 */ }
+}
+
+function barRow(label, size, maxSize, path, drillHtml) {
+  const pct = maxSize > 0 ? Math.max(1.5, size / maxSize * 100) : 1.5;
+  const click = path ? ` title="${esc(path)}"` : "";
+  return `<div class="disk-bar-row">
+    <span class="lbl"${click}>${esc(label)}</span>
+    <span class="bar-wrap"><span class="bar" style="width:${pct}%"></span></span>
+    <span class="val">${fmtGB(size)}</span>
+  </div>${drillHtml || ""}`;
+}
+
+function renderDiskReport(res) {
+  const ov = res.overview;
+  const usedPct = (ov.used / ov.total * 100).toFixed(0);
+  const freePct = (100 - usedPct).toFixed(0);
+  const freeColor = ov.free / ov.total < 0.15 ? "#d1242f" : (ov.free / ov.total < 0.25 ? "var(--warn)" : "var(--ok)");
+
+  // 目录排行（Top 12）
+  const dirs = res.top_dirs.filter(d => d.is_dir).slice(0, 12);
+  const maxDir = dirs.length ? dirs[0].size : 1;
+  let dirHtml = "";
+  for (const d of dirs) {
+    const sub = res.drill[d.name];
+    let drillHtml = "";
+    if (sub && sub.length) {
+      drillHtml = `<details class="disk-drill"><summary>展开 ${d.name} 内部 Top${Math.min(sub.length, 8)}</summary>` +
+        sub.slice(0, 8).map(s => `&nbsp;&nbsp;${esc(s.name)} — ${fmtGB(s.size)}`).join("<br>") + "</details>";
+    }
+    dirHtml += barRow(d.name, d.size, maxDir, d.path, drillHtml);
+  }
+
+  // 已知大户
+  const kindMap = { clean: ["可清理", "clean"], confirm: ["需确认", "confirm"], system: ["系统", "system"] };
+  let knownHtml = "";
+  for (const k of res.known) {
+    const [txt, cls] = kindMap[k.kind] || ["", ""];
+    const isRecycle = k.name.includes("回收站");
+    let act = `<button class="disk-open" onclick="openInExplorer('${esc(k.path).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}')">打开</button>`;
+    if (k.kind !== "system") {
+      act += ` <button class="disk-open disk-clean" onclick="cleanItem('${esc(k.path).replace(/\\/g, "\\\\").replace(/'/g, "\\'")}', ${isRecycle})">${isRecycle ? "清空" : "一键清理"}</button>`;
+    }
+    knownHtml += `<tr>
+      <td>${esc(k.name)} <span class="disk-badge ${cls}">${txt}</span></td>
+      <td class="path" title="${esc(k.path)}">${esc(k.path)}</td>
+      <td style="text-align:right">${fmtGB(k.size)}</td>
+      <td>${esc(k.advice)}</td>
+      <td style="white-space:nowrap">${act}</td>
+    </tr>`;
+  }
+
+  // 大文件 Top 15
+  let bigHtml = "";
+  for (const f of res.big_files.slice(0, 15)) {
+    const dt = new Date(f.mtime * 1000);
+    bigHtml += `<tr>
+      <td class="path" title="${esc(f.path)}">${esc(f.path)}</td>
+      <td style="text-align:right">${fmtGB(f.size)}</td>
+      <td>${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}</td>
+    </tr>`;
+  }
+
+  $("diskReport").innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+      <label class="sec" style="margin:0;font-size:16px">📋 ${esc(res.target)} 体检报告</label>
+      <button class="disk-open" id="diskAgain">重新扫描</button>
+    </div>
+    <div class="disk-kpi disk-sec" style="margin-top:10px">
+      <div class="kpi"><div class="num">${(ov.total / 1024 ** 3).toFixed(0)} GB</div><div class="cap">${res.is_drive ? "总容量" : `所在盘 ${esc(res.drive)} 总容量`}</div></div>
+      <div class="kpi"><div class="num">${(ov.used / 1024 ** 3).toFixed(1)} GB</div><div class="cap">${res.is_drive ? "已用" : "所在盘已用"} ${usedPct}%</div></div>
+      <div class="kpi"><div class="num" style="color:${freeColor}">${(ov.free / 1024 ** 3).toFixed(1)} GB</div><div class="cap">${res.is_drive ? "剩余" : "所在盘剩余"} ${freePct}%</div></div>
+      <div class="kpi"><div class="num">${res.scanned_files.toLocaleString()}</div><div class="cap">扫描条目数</div></div>
+    </div>
+    <div class="disk-sec"><h3>📁 一层目录体积排行</h3>${dirHtml}</div>
+    ${knownHtml ? `<div class="disk-sec"><h3>🧹 已知大户（按体积排序）</h3>
+      <table class="disk-tbl"><tr><th>项目</th><th>路径</th><th>体积</th><th>建议</th><th></th></tr>${knownHtml}</table>
+      <p class="tip">「可清理」= 删除后自动重建的缓存；「需确认」= 删前请想一下；本工具不代删，点「打开」后自行操作最稳。</p></div>` : ""}
+    ${bigHtml ? `<div class="disk-sec"><h3>📦 最大文件 Top 15（≥100MB）</h3>
+      <table class="disk-tbl"><tr><th>文件路径</th><th>体积</th><th>修改日期</th></tr>${bigHtml}</table></div>` : ""}
+    <div class="disk-sec"><h3>🚚 迁移大文件夹到其他盘</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="moveSrc" placeholder="源文件夹路径，如 ${esc(res.target.endsWith("\\") ? "D:\\BaiduNetdiskDownload" : res.target + "\\某文件夹")}" style="flex:1;min-width:260px;padding:8px 12px">
+        <select id="moveDst" style="width:auto;min-width:130px"></select>
+        <button class="dl" id="goMove" style="margin-top:0;width:auto">🚚 开始迁移</button>
+      </div>
+      <div class="msg" id="msgMove" style="margin-top:10px"></div>
+      <div id="moveProg" style="display:none;font-size:13px;color:var(--text2);margin-top:8px"></div>
+      <p class="tip">跨盘迁移 = 复制 → 校验一致 → 删源，中途失败源文件不会丢。<b>AppData 与系统目录会被拒绝</b>（应用数据请用应用内的「更改存储路径」功能迁，否则软件会坏）。</p>
+    </div>
+  `;
+  $("diskReport").style.display = "block";
+  $("diskAgain").onclick = () => {
+    $("diskReport").style.display = "none";
+    $("diskEntry").style.display = "block";
+  };
+  // 迁移目标盘：列出所有其他盘
+  const srcDrive = (res.target.match(/^([a-zA-Z]):/) || [])[1] || "";
+  fetch(API2 + "/api/disk/drives").then(r => r.json()).then(j => {
+    const sel = $("moveDst");
+    sel.innerHTML = "";
+    (j.drives || []).filter(d => d.letter.toUpperCase() !== srcDrive.toUpperCase()).forEach(d => {
+      const op = document.createElement("option");
+      op.value = d.path;
+      op.textContent = `迁到 ${d.path}（${d.type}）`;
+      sel.appendChild(op);
+    });
+    if (!sel.options.length) {
+      const op = document.createElement("option");
+      op.textContent = "无其他可用盘";
+      sel.appendChild(op);
+    }
+  });
+  $("goMove").onclick = () => startMove();
+}
+
+// ---- 清理 / 回收站 / 迁移 ----
+async function cleanItem(path, isRecycle) {
+  const ok = confirm(isRecycle
+    ? "确定清空所有盘的回收站吗？清空后无法恢复！"
+    : "确定清理这个缓存目录的内容吗？\n\n" + path + "\n\n缓存会自动重建，但游戏首次启动会重新生成着色器等数据。");
+  if (!ok) return;
+  const fd = new FormData();
+  if (isRecycle) {
+    const r = await fetch(API2 + "/api/disk/empty-recycle", { method: "POST", body: fd });
+    const j = await r.json();
+    if (j.status) {
+      const msg = j.remain > 32 * 1024 * 1024
+        ? `回收站已清空 ✅（剩余 ${fmtGB(j.remain)} 为系统保留区，属正常）`
+        : "回收站已清空 ✅";
+      alert(msg);
+    } else alert("清空失败: " + j.message);
+  } else {
+    fd.append("path", path);
+    const r = await fetch(API2 + "/api/disk/clean", { method: "POST", body: fd });
+    const j = await r.json();
+    if (j.status) {
+      alert(`清理完成 ✅ 释放 ${fmtGB(j.freed)}` +
+        (j.errors ? `\n（${j.errors} 个文件被占用跳过，属正常）` : ""));
+    } else alert("清理失败: " + j.message);
+  }
+}
+
+let moveTaskId = null, moveTimer = null;
+async function startMove() {
+  const src = ($("moveSrc").value || "").trim();
+  const dst = $("moveDst").value;
+  if (!src) return showMsg("msgMove", "请填源文件夹路径", "err");
+  if (!dst) return showMsg("msgMove", "没有可用的目标盘", "err");
+  if (!confirm(`确定把\n${src}\n迁移到\n${dst}？\n\n跨盘迁移会复制→校验→删源，大文件夹耗时较长，请保持电脑开机。`)) return;
+  const fd = new FormData();
+  fd.append("src", src);
+  fd.append("dst_parent", dst);
+  const r = await fetch(API2 + "/api/disk/move", { method: "POST", body: fd });
+  const j = await r.json();
+  if (!j.status) return showMsg("msgMove", j.message || "迁移启动失败", "err");
+  moveTaskId = j.task_id;
+  hideMsg("msgMove");
+  $("moveProg").style.display = "block";
+  moveTimer = setInterval(pollMove, 1500);
+}
+async function pollMove() {
+  if (!moveTaskId) return clearInterval(moveTimer);
+  try {
+    const r = await fetch(API2 + "/api/disk/move-status?task_id=" + moveTaskId);
+    const j = await r.json();
+    if (!j.status) { clearInterval(moveTimer); return; }
+    const pct = j.total > 0 ? (j.moved / j.total * 100).toFixed(1) : "0";
+    $("moveProg").innerHTML =
+      `<div style="background:var(--bg);border-radius:6px;height:10px;overflow:hidden;margin:4px 0">
+         <div style="width:${pct}%;height:100%;background:var(--ok)"></div></div>
+       已迁移 ${fmtGB(j.moved)} / ${fmtGB(j.total)}（${pct}%）｜ ${esc((j.current || "").slice(-60))}`;
+    if (j.error) {
+      clearInterval(moveTimer); moveTaskId = null;
+      showMsg("msgMove", "迁移中断: " + j.error + "（已迁移的部分保留在目标盘，源文件未删除的部分不受影响）", "err");
+    } else if (j.done) {
+      clearInterval(moveTimer); moveTaskId = null;
+      let extra = "";
+      if (j.skipped_count) extra += `；${j.skipped_count} 个文件被占用跳过（仍在原处）`;
+      if (j.verify_failed.length) extra += `；${j.verify_failed.length} 个文件校验不一致已保留源文件`;
+      showMsg("msgMove", `迁移完成 ✅ 已搬到 ${j.dst}` + extra, "hint");
+      $("moveProg").innerHTML = "";
+    }
+  } catch (e) { /* 网络抖动，下轮再试 */ }
+}
+
+async function loadDrives() {
+  const box = $("diskDrives");
+  box.innerHTML = "";
+  try {
+    const r = await fetch(API2 + "/api/disk/drives");
+    const j = await r.json();
+    if (!j.status || !j.drives.length) throw new Error();
+    for (const d of j.drives) {
+      const b = document.createElement("button");
+      b.className = "dl alt disk-pick";
+      b.dataset.t = d.path;
+      b.textContent = d.letter === "C" ? "C 盘" : `${d.letter} 盘 · ${d.type}`;
+      b.title = `${d.path}（${d.type}）`;
+      b.onclick = () => {
+        document.querySelectorAll(".disk-pick").forEach(x => x.classList.remove("sel"));
+        b.classList.add("sel");
+        $("diskPath").value = d.path;
+      };
+      box.appendChild(b);
+    }
+  } catch (e) {
+    // 接口不可用时退化为常见盘符
+    for (const t of ["C:\\", "D:\\"]) {
+      const b = document.createElement("button");
+      b.className = "dl alt disk-pick";
+      b.dataset.t = t;
+      b.textContent = t[0] + " 盘";
+      b.onclick = () => {
+        document.querySelectorAll(".disk-pick").forEach(x => x.classList.remove("sel"));
+        b.classList.add("sel");
+        $("diskPath").value = t;
+      };
+      box.appendChild(b);
+    }
+  }
+}
+loadDrives();
+
+$("goDisk").onclick = () => {
+  const t = ($("diskPath").value || "").trim();
+  if (!t) return showMsg("msgDisk", "请先选盘或输入路径", "err");
+  startDiskScan(t);
+};
+</script>
+</body>
+</html>

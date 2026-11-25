@@ -1,0 +1,34 @@
+# >>> 通用
+__pycache__/
+*.py[cod]
+*.pyo
+*.log
+*.tmp
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# >>> 本项目：模型、运行时、产物一律不进仓库
+models/
+*.onnx
+*.pb
+*.bin
+runtime-tools/
+runtime-hivision/
+portable/
+dist/
+build/
+*.spec.bak
+
+# >>> 用户数据
+outputs/
+samples/
+*.mp4
+*.mp3
+*.wav
+*.flac
+!docs/**/*.png
