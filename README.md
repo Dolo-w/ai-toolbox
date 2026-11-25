@@ -1,10 +1,10 @@
 # 小工具箱（AI Toolbox）
 
-五个常用小功能，装进一个本地窗口。**全部推理在本机完成，图片和录音不上传。**
+六个常用小功能，装进一个本地窗口。**全部推理在本机完成，图片和录音不上传。**
 
 ![界面](docs/screenshot.png)
 
-做这个的起因很具体：证件照、字幕、擦水印、放大、清磁盘这五件事，散在五个网站，
+做这个的起因很具体：证件照、字幕、擦水印、放大、清磁盘、转格式这六件事，散在六个网站，
 每一件都要先上传、等进度条、再注册。挪到自己机器上之后，这些步骤没有了。
 
 ## 功能
@@ -15,6 +15,7 @@
 | 视频字幕 | 语音转写导出 SRT；把字幕**烧进画面**输出新视频 | SenseVoice（sherpa-onnx）+ ffmpeg |
 | 图片消除笔 | 涂抹擦除水印、路人、小杂物 | OpenCV Telea inpaint |
 | 老照片修复 | 2/3/4 倍放大 + 锐化 | OpenCV dnn_superres（EDSR / FSRCNN） |
+| Word ⇄ PDF | 双向转换，按文件头自动判方向；PDF 回来的是可编辑近似稿 | 本机 Microsoft Word（COM） |
 | 磁盘体检 | 只读扫描，找大文件夹、大文件、可清理项 | 纯 Python |
 
 ## 架构
@@ -97,6 +98,10 @@ pyinstaller xiaoGongJuXiang.spec
 - **磁盘扫描**跳过 reparse point（junction / 符号链接），不然体积会虚报。
 - **图片消除笔**的 mask 任何明显笔迹都算擦除区（灰度 > 20），并做一次膨胀盖住笔迹边缘。
 - **透明 PNG** 在浅色页面上看不出来，测试时把结果贴到深色底上更容易发现残留。
+- **Word ⇄ PDF** 不引入第三方转换库，直接调本机 Word 的 COM 接口（`Word.Application`），
+  所以机器上必须装了 Microsoft Word；PDF 转回来是「可编辑的近似稿」，扫描件和复杂表格会失真。
+  转换先写临时目录再 `shutil.move` 到 `Downloads\AIToolbox`，避免直接写目标目录偶发的命令失败。
+  上传文件名可能是 RFC2047 编码（`=?utf-8?B?...?=`），落地前要解码并清掉 `<>:"/\|?*` 等非法字符。
 
 ## 协议
 
@@ -113,7 +118,7 @@ pyinstaller xiaoGongJuXiang.spec
 | OpenCV | Apache-2.0 |
 | HarmonyOS Sans 字体 | 华为 HarmonyOS Sans 字体协议（可商用，但不可单独售卖） |
 
-字体与模型**不在本仓库内**，需自行下载。
+字体与模型**不在本仓库内**，需自行下载。Word ⇄ PDF 依赖你机器上已安装的 Microsoft Word，不属于本仓库分发内容。
 
 ## 已知限制
 
@@ -122,6 +127,8 @@ pyinstaller xiaoGongJuXiang.spec
 - 超分需要带 `dnn_superres` 的 OpenCV 构建（`opencv-contrib-python`）；
   官方 `opencv-python` 没有这个模块，会退化到插值。
 - 老照片修复只做放大增强，不做人脸修复、划痕修补。
+
+
 
 
 

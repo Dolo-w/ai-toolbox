@@ -134,6 +134,10 @@
       <div class="icon">🩺</div><div class="name">磁盘体检</div>
       <div class="desc">只读扫描 · 找大文件 · 可清理项</div><span class="tag ok">可用</span>
     </div>
+    <div class="card" data-tool="convert">
+      <div class="icon">📄</div><div class="name">Word ⇄ PDF</div>
+      <div class="desc">双向互转 · 本机 Word 排版</div><span class="tag ok">可用</span>
+    </div>
   </div>
 
   <!-- ==================== 证件照 ==================== -->
@@ -187,13 +191,6 @@
         <label class="sec">识别内核</label>
         <select id="srtEngine">
           <option value="sensevoice" selected>SenseVoice（本机运行，中文自带标点）</option>
-        </select>
-        <label class="sec" id="srtModelLabel">Whisper 模型精度</label>
-        <select id="srtModel">
-          <option value="small" selected>高精度（small，约 484MB，推荐，错字更少）</option>
-          <option value="base">均衡（base，约 145MB，速度更快）</option>
-          <option value="medium">最高精度（medium，约 1.5GB，首次下载较久）</option>
-          <option value="tiny">极速（tiny，约 75MB，错字较多）</option>
         </select>
         <label class="sec">语言</label>
         <select id="srtLang">
@@ -289,6 +286,29 @@
         <div class="preview-box"><img id="fixPreview" alt="修复结果" style="max-width:340px"></div>
         <div class="btns"><button class="dl" id="dlFix">下载修复图</button></div>
         <p class="tip" style="text-align:left" id="fixEngine"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== Word ⇄ PDF ==================== -->
+  <div class="panel-box tool-panel" id="panel-convert">
+    <div class="row">
+      <div class="left">
+        <div class="drop" id="dropConv">点击或拖拽上传 .docx / .doc / .pdf<br><small>方向按扩展名自动判断；转换在本机 Word 里完成，文件不上传</small></div>
+        <input type="file" id="fileConv" accept=".docx,.doc,.pdf" hidden>
+        <button class="go" id="goConv" disabled>开始转换</button>
+        <div class="pbar-row" id="pbarConv" style="display:none">
+          <div class="pbar-track"><div class="pbar-fill" id="pbarConvFill"></div></div>
+          <div class="pbar-text" id="pbarConvText"></div>
+        </div>
+        <div class="msg" id="msgConv"></div>
+        <p class="tip" style="text-align:left">Word 转 PDF 保留原排版；PDF 转回来是「可编辑的近似稿」，扫描件和复杂图表效果有限。</p>
+      </div>
+      <div class="right result" id="convBox" style="display:none">
+        <label class="sec" style="text-align:left">转换结果</label>
+        <div class="preview-box" style="display:block;text-align:left;padding:14px" id="convName"></div>
+        <div class="btns"><button class="dl" id="openConv">打开所在文件夹</button></div>
+        <p class="tip" style="text-align:left">输出到 Downloads\AIToolbox</p>
       </div>
     </div>
   </div>
@@ -522,6 +542,62 @@ async function pollTask(taskId, group, offsetPct, onUpdate) {
 const isVideoFile = f =>
   (f.type && f.type.startsWith("video")) ||
   /\.(mp4|mov|mkv|avi|webm|flv|m4v|ts)$/i.test(f.name || "");
+
+// ========== Word ⇄ PDF ==========
+let convFile = null;
+const isWordFile = f => /\.(docx?)$/i.test(f.name || "");
+
+bindDrop("dropConv", "fileConv", f => {
+  if (!/\.(docx?|pdf)$/i.test(f.name || "")) {
+    $("msgConv").textContent = "只支持 .docx / .doc / .pdf";
+    return;
+  }
+  convFile = f;
+  $("msgConv").textContent = "";
+  $("convBox").style.display = "none";
+  const dir = isWordFile(f) ? "Word → PDF" : "PDF → Word";
+  $("dropConv").innerHTML = f.name + "<br><small>方向：" + dir + " ｜ " +
+    (f.size / 1024 / 1024).toFixed(1) + " MB</small>";
+  $("goConv").disabled = false;
+});
+
+$("goConv").onclick = async () => {
+  if (!convFile) return;
+  const ep = isWordFile(convFile) ? "/word2pdf" : "/pdf2word";
+  $("goConv").disabled = true;
+  $("convBox").style.display = "none";
+  $("msgConv").textContent = "";
+  $("pbarConv").style.display = "flex";
+  $("pbarConvFill").style.width = "8%";
+  $("pbarConvText").textContent = "上传中…";
+  try {
+    const fd = new FormData();
+    fd.append("file", convFile, convFile.name);
+    const r = await fetch(API2 + ep, { method: "POST", body: fd });
+    const j = await r.json();
+    if (!j.status) throw new Error(j.message || "提交失败");
+    const done = await pollTask(j.task_id, "conv", 8, t => {
+      $("pbarConvFill").style.width = Math.max(12, t.progress || 12) + "%";
+      $("pbarConvText").textContent = t.message || "转换中…";
+    });
+    $("pbarConvFill").style.width = "100%";
+    $("pbarConvText").textContent = "完成";
+    const res = done.result || {};
+    $("convBox").style.display = "block";
+    $("convName").innerHTML = "<b>" + (res.name || "输出文件") + "</b><br><small>" +
+      ((res.size || 0) / 1024).toFixed(0) + " KB</small>";
+    $("openConv").onclick = async () => {
+      const fd2 = new FormData();
+      fd2.append("path", res.path || "");
+      await fetch(API2 + "/reveal", { method: "POST", body: fd2 });
+    };
+  } catch (e) {
+    $("pbarConv").style.display = "none";
+    $("msgConv").textContent = e.message || String(e);
+  } finally {
+    $("goConv").disabled = false;
+  }
+};
 
 bindDrop("dropSrt", "fileSrt", f => {
   srtFile = f;

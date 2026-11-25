@@ -28,6 +28,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ---- 便携版是嵌入式 Python，site 不会处理 lib-tools 里的 .pth ----
+# pywin32 的 win32 / win32\lib 两个子目录必须自己补进 sys.path，
+# 否则 import win32com 会报 No module named 'pywintypes'。
+_LIB_TOOLS = os.path.join(BASE_DIR, "lib-tools")
+for _p in (os.path.join(_LIB_TOOLS, "win32", "lib"),
+           os.path.join(_LIB_TOOLS, "win32"),
+           _LIB_TOOLS):
+    if os.path.isdir(_p) and _p not in sys.path:
+        sys.path.insert(0, _p)
 MODELS_DIR = os.path.join(os.path.dirname(BASE_DIR), "models")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
@@ -711,6 +721,142 @@ async def reveal(path: str = Form(...)):
 
 
 # ============================================================
+# Word <-> PDF 互转（本机 Word COM，不联网、不上传）
+# ============================================================
+CONVERT_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "AIToolbox")
+os.makedirs(CONVERT_DIR, exist_ok=True)
+_WORD_LOCK = threading.Lock()
+
+WD_DOCX = 16   # wdFormatXMLDocument
+WD_PDF = 17    # wdFormatPDF
+
+
+def _word_convert(src, dst, fmt):
+    """用本机 Word 转格式。先存到临时文件再搬到目标目录：
+    直接 SaveAs2 到 Downloads 下偶尔会报「命令失败」，两步走更稳。"""
+    import pythoncom
+    import win32com.client as win32
+    ext = ".pdf" if fmt == WD_PDF else ".docx"
+    tmp_dst = os.path.join(tempfile.gettempdir(), "toolbox_conv_%d%s" % (int(time.time() * 1000), ext))
+    pythoncom.CoInitialize()
+    app = None
+    try:
+        app = win32.DispatchEx("Word.Application")
+        app.Visible = False
+        app.DisplayAlerts = 0
+        doc = app.Documents.Open(
+            src, ReadOnly=False, ConfirmConversions=False, AddToRecentFiles=False,
+        )
+        try:
+            doc.SaveAs2(tmp_dst, FileFormat=fmt)
+        finally:
+            doc.Close(False)
+    finally:
+        if app is not None:
+            try:
+                app.Quit()
+            except Exception:
+                pass
+        pythoncom.CoUninitialize()
+    if not os.path.exists(tmp_dst) or os.path.getsize(tmp_dst) == 0:
+        raise RuntimeError("Word 没有产出文件（可能源文件损坏或受密码保护）")
+    shutil.move(tmp_dst, dst)
+
+
+def _convert_job(tid, data, ext, out_name, fmt):
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            src = os.path.join(td, "input" + ext)
+            with open(src, "wb") as f:
+                f.write(data)
+            _task_set(tid, phase="convert", progress=20, message="正在调用本机 Word 转换…")
+            dst = os.path.join(CONVERT_DIR, out_name)
+            with _WORD_LOCK:
+                _word_convert(src, dst, fmt)
+        if not os.path.exists(dst) or os.path.getsize(dst) == 0:
+            raise RuntimeError("转换没有产出文件，可能源文件损坏或受密码保护")
+        _task_set(tid, done=True, ok=True, phase="done", progress=100,
+                  message="转换完成",
+                  result={"path": dst, "size": os.path.getsize(dst), "name": out_name})
+    except Exception as e:
+        traceback.print_exc()
+        msg = f"{type(e).__name__}: {e}"
+        if "com_error" in msg.lower():
+            msg = "调用 Word 失败。请确认本机装了 Microsoft Word，或先关掉正在运行的 Word 窗口。"
+        _task_set(tid, done=True, ok=False, phase="error", message="转换失败", error=msg)
+
+
+def _safe_stem(filename):
+    """上传文件名可能是 RFC2047 编码（=?utf-8?B?...?=），也可能带非法字符。
+    统一解出来再洗一遍，返回可安全用作文件名的主干。"""
+    import email.header
+    name = filename or "document"
+    try:
+        parts = email.header.decode_header(name)
+        name = "".join(
+            (p.decode(c or "utf-8", "ignore") if isinstance(p, bytes) else p)
+            for p, c in parts
+        )
+    except Exception:
+        pass
+    name = os.path.basename(name.replace("\\", "/"))
+    stem = os.path.splitext(name)[0]
+    stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", stem).strip(" ._")
+    return (stem[:60] or "document")
+
+
+def _stamp():
+    return time.strftime("%Y%m%d_%H%M%S")
+
+
+def _sniff_kind(data):
+    """按文件头判断真实类型：不信扩展名，也不信上传时的 filename。"""
+    if data[:4] == b"%PDF":
+        return "pdf"
+    if data[:4] == b"PK\x03\x04":
+        return "docx"
+    if data[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+        return "doc"
+    return ""
+
+
+@app.post("/word2pdf")
+async def word2pdf(file: UploadFile = File(...)):
+    data = await file.read()
+    if not data:
+        return JSONResponse({"status": False, "message": "未收到文件"})
+    kind = _sniff_kind(data)
+    if kind not in ("docx", "doc"):
+        return JSONResponse({"status": False, "message": "这不是 Word 文件（.docx / .doc），要么是 PDF，请换另一个按钮"})
+    stem = _safe_stem(file.filename)
+    tid = _task_new("convert", "准备中…")
+    threading.Thread(
+        target=_convert_job,
+        args=(tid, data, "." + kind, f"{_stamp()}_{stem}.pdf", WD_PDF),
+        daemon=True,
+    ).start()
+    return {"status": True, "task_id": tid}
+
+
+@app.post("/pdf2word")
+async def pdf2word(file: UploadFile = File(...)):
+    data = await file.read()
+    if not data:
+        return JSONResponse({"status": False, "message": "未收到文件"})
+    kind = _sniff_kind(data)
+    if kind != "pdf":
+        return JSONResponse({"status": False, "message": "这不是 PDF 文件，要么是 Word，请换另一个按钮"})
+    stem = _safe_stem(file.filename)
+    tid = _task_new("convert", "准备中…")
+    threading.Thread(
+        target=_convert_job,
+        args=(tid, data, ".pdf", f"{_stamp()}_{stem}.docx", WD_DOCX),
+        daemon=True,
+    ).start()
+    return {"status": True, "task_id": tid}
+
+
+# ============================================================
 # 消除笔（OpenCV inpaint）
 # ============================================================
 @app.post("/inpaint")
@@ -1231,5 +1377,7 @@ async def index():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("TOOLBOX_PORT", "8081")))
+
+
 
 
